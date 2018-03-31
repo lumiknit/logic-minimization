@@ -378,8 +378,8 @@ function sop_to_s(lst) {
         s += " + ";
         f = 1;
       }
-      if(lst[k][j] == '0') s += term_to_s(j + 1, 0);
-      else if(lst[k][j] == '1') s += term_to_s(j + 1, 1);
+      if(lst[k][j] == '0') s += term_to_s(1 + Number(j), 0);
+      else if(lst[k][j] == '1') s += term_to_s(1 + Number(j), 1);
     }
     f = 0;
   }
