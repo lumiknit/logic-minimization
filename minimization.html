@@ -1,0 +1,286 @@
+<html>
+  <head>
+    <title> Logic Circuit Minimization </title>
+    <meta charset="utf-8">
+    <script>
+
+    </script>
+
+    <style>
+     table {
+       border: 2px solid #000;
+       border-collapse: collapse;
+     }
+     th, td {
+       border: 1px solid #000;
+       padding: 5px;
+     }
+    </style>
+  </head>
+  <body>
+    <script
+			src="https://code.jquery.com/jquery-3.3.1.slim.js"
+			integrity="sha256-fNXJFIlca05BIO2Y5zh1xrShK3ME+/lYZ0j+ChxX2DA="
+			crossorigin="anonymous"></script>
+    <script
+      src="./min.js"></script>
+
+
+    <h1> Logic Circuit Minimization </h1>
+
+    <h2> Input </h2>
+
+    N = <input type="number" id="in_n" size="5" step="1" min="1" max="200" value="4"><br><br>
+
+    <input type="radio" name="sopos" id="in_sop" checked> <label for="in_sop"> SOP </label>
+    <input type="radio" name="sopos" id="in_pos"> <label for="in_pos"> POS </label>
+    <br>
+    Terms = <input type="text" id="in_t" style="width:70%"><br>
+    Don't-Care = <input type="text" id="in_dc" style="width:70%"><br>
+
+    <button type="button" id="btn_cal"> Calculate </button>
+
+    <h2> Result </h2>
+
+    <div id="output">
+    </div>
+
+    <script type="text/javascript">
+     $('#btn_cal').click(function(){
+       do_cal();
+     });
+
+     function do_cal() {
+       var O = $('div#output');
+       O.empty();
+       O.text('calculating');
+
+       var in_n = $('#in_n').val();
+       var in_sopos = $('#in_pos').prop("checked");
+       var in_t = $('#in_t').val();
+       var in_dc = $('#in_dc').val();
+
+       var res, t;
+       res = calculate_all(in_n, in_sopos, in_t, in_dc);
+       O.empty();
+
+       /* Error */
+       if(res.err) {
+         O.text('ERROR: ' + res.err);
+         return;
+       }
+
+       /* Echo Input */
+       t = gen_cannonical(res);
+       O.append('<p><b>SOP</b> f = ' + t.sop + '</p><p><b>POS</b> f = ' + t.pos + '</p>');
+
+       /* Truth Table */
+       O.append('<h3> Truth Table </h3>')
+        .append('<table><tr>')
+        .append('<th> index </th>');
+       for(var i = 1; i <= res.input.n; i++) {
+         O.append('<th> x<sub>' + i + '</sub> </th>');
+       }
+       O.append('<th>f</th></tr>');
+       for(var i = 0; i < (1 << res.input.n); i++) {
+         O.append('<tr>')
+          .append('<td>' + i + '</td>');
+         for(var j = 0; j < res.input.n; j++) {
+           O.append('<td>' + ((i >> (res.input.n - j - 1)) & 1) + '</td>');
+         }
+         if(res.truth_table[i] == 1) O.append('<td>1</td>');
+         else if(res.truth_table[i] == -1) O.append('<td>D</td>');
+         else O.append('<td>0</td>');
+         O.append('</tr>');
+       }
+       O.append('</table>');
+
+       /* Karnaugh Map */
+       O.append('<h3> Karnaugh Map </h3>');
+       if(res.input.n > 6) {
+         O.append("n is too large to draw");
+       } else {
+         var t = gen_karnaugh(res);
+
+         for(var i = 0; i < t.length; i++) {
+           O.append('<table>');
+           if(t.length == 2) {
+             O.append('<caption> x5 = ' + i + '</caption');
+           } else if(t.length == 4) {
+             O.append('<caption> x5x6 = ' + ['00','01','11','10'][i] + '</caption');
+           }
+           for(var j = 0; j < t[i].length; j++) {
+             O.append('<tr>');
+             for(var k = 0; k < t[i][j].length; k++) {
+               O.append('<td>' + t[i][j][k] + '</td>');
+             }
+             O.append('</tr>');
+           }
+           O.append('</table><br>');
+         }
+       }
+
+       /* Implicant */
+       O.append('<h3> Implicants from Tabular Method </h3>');
+       {
+         var s = '';
+         var n = res.input.n;
+         var t = res.impl;
+         s += '<table>';
+         for(var i = 0; i <= n; i++) {
+           s += '<tr>';
+           for(var j = 0; j <= n - i; j++) {
+             s += '<td>';
+             for(var k in t[j][i]) {
+               s += '' + t[j][i][k] + '<br>';
+             }
+             s += '</td>';
+           }
+           for(var j = n - i + 1; j < n; j++) {
+             s += '<td> </td>';
+           }
+           s += '</tr>';
+         }
+         s += '</table><br>';
+         O.append(s);
+       }
+
+       /* Prime */
+       O.append('<h3> Prime Implicants from Tabular Method </h3>');
+       {
+         var s = '';
+         var n = res.input.n;
+         var t = res.prime;
+         s += '<table>';
+         s += '<tr><th>prime</th>';
+         for(var l in res.row) {
+           var i = res.row[l];
+           s += '<th>';
+           s += i;
+           s += '</th>';
+         }
+         s += '</tr>';
+         for(var i = 0; i < t.length; i++) {
+           var z = t[i];
+           var q = [];
+           expand(z, 0, q);
+           s += '<tr>';
+           s += '<td>';
+           s += z;
+           s += '</td>';
+           for(var l in res.row) {
+             var j = res.row[l];
+             s += '<th>';
+             if(q.includes(pad(j.toString(2), n))) {
+               s += 'x';
+             }
+             s += '</th>';
+           }
+           s += '</tr>';
+         }
+         s += '</table><br>';
+         O.append(s);
+       }
+
+       /* Essential Prime */
+       O.append('<h3> Essential Prime Implicants from Tabular Method </h3>');
+       {
+         var s = '';
+         var n = res.input.n;
+         var t = res.ess;
+         s += '<table>';
+         s += '<tr><th>prime</th>';
+         for(var l in res.row) {
+           var i = res.row[l];
+           s += '<th>';
+           s += i;
+           s += '</th>';
+         }
+         s += '</tr>';
+         for(var i = 0; i < t.length; i++) {
+           var z = t[i];
+           var q = [];
+           expand(z, 0, q);
+           s += '<tr>';
+           s += '<td>';
+           s += z;
+           s += '</td>';
+           for(var l in res.row) {
+             var j = res.row[l];
+             s += '<th>';
+             if(q.includes(pad(j.toString(2), n))) {
+               s += 'x';
+             }
+             s += '</th>';
+           }
+           s += '</tr>';
+         }
+         s += '</table><br>';
+         O.append(s);
+       }
+
+       /* Non-Essential Prime */
+       O.append('<h3> Non-Essential Prime Implicants from Tabular Method </h3>');
+       {
+         var s = '';
+         var n = res.input.n;
+         var t = res.ness;
+         s += '<table>';
+         s += '<tr><th>prime</th>';
+         for(var l in res.rrow) {
+           var i = res.rrow[l];
+           s += '<th>';
+           s += i;
+           s += '</th>';
+         }
+         s += '</tr>';
+         for(var i = 0; i < t.length; i++) {
+           var z = t[i];
+           var q = [];
+           expand(z, 0, q);
+           s += '<tr>';
+           s += '<td>';
+           s += z;
+           s += '</td>';
+           for(var l in res.rrow) {
+             var j = res.rrow[l];
+             s += '<th>';
+             if(q.includes(pad(j.toString(2), n))) {
+               s += 'x';
+             }
+             s += '</th>';
+           }
+           s += '</tr>';
+         }
+         s += '</table><br>';
+         O.append(s);
+
+         /* Result */
+         O.append('<h2>Result</h2>');
+         s = '';
+         s += '<ol>';
+         var cnt = 0;
+         var f = function(p, l) {
+           if(p.length == 0) {
+             /* Print */
+             s += '<li>';
+             for(var k in l) {
+               s += l[k] + "&nbsp;&nbsp;";
+             }
+             s += "=> f = " + sop_to_s(l);
+             s += '</li>';
+           } else if(p.length == 1) {
+             return f(p[0][2], l.concat(p[0][1]));
+           } else {
+             f(p[0][2], l.concat(p[0][1]));
+             f(p[1][2], l.concat(p[1][1]));
+           }
+         }
+         f(res.res, res.ess);
+         s += '</ol>';
+         O.append(s);
+       }
+     }
+    </script>
+  </body>
+</html>
